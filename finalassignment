@@ -1,0 +1,6 @@
+url <- "C:\Users\Ryan\Downloads\getdata%2Fprojectfiles%2FUCI HAR Dataset.zip"
+f <- "Dataset.zip"
+if (!file.exists(path)) {
+    dir.create(path)
+}
+download.file(url, file.path(path, f))
