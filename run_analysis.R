@@ -1,25 +1,20 @@
-packages <- c("data.table", "reshape2")
-sapply(packages, require, character.only = TRUE, quietly = TRUE)
+## Data download and unzip 
 
-path <- getwd()
-path
+# string variables for file download
+fileName <- "UCIdata.zip"
+url <- "http://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+dir <- "UCI HAR Dataset"
 
-# #url <- "C:/Users/Ryan/Documents/gettingandcleaningdata"
-# #f <- "Dataset.zip"
-# if (!file.exists(path)) {
-#   dir.create(path)
-# }
-# download.file(url, file.path(path, f))
+# File download verification. If file does not exist, download to working directory.
+if(!file.exists(fileName)){
+        download.file(url,fileName, mode = "wb") 
+}
 
+# File unzip verification. If the directory does not exist, unzip the downloaded file.
+if(!file.exists(dir)){
+	unzip("UCIdata.zip", files = NULL, exdir=".")
+}
 
-# executable <- file.path("C:", "Program Files (x86)", "7-Zip", "7z.exe")
-# parameters <- "x"
-# cmd <- paste(paste0("\"", executable, "\""), parameters, paste0("\"", file.path(path, 
-#                                                                                 f), "\""))
-# system(cmd)
-# 
-pathIn <- file.path(path, "UCI HAR Dataset")
-list.files(pathIn, recursive = TRUE)
 
 #read the subject files
 
