@@ -1,135 +1,103 @@
-## Data download and unzip 
+# Load reuired packages
+packages <- c("data.table", "reshape2", "dplyr")
+sapply(packages, require, character.only=TRUE, quietly=TRUE)
 
-# string variables for file download
-fileName <- "UCIdata.zip"
-url <- "http://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
-dir <- "UCI HAR Dataset"
 
-# File download verification. If file does not exist, download to working directory.
-if(!file.exists(fileName)){
-        download.file(url,fileName, mode = "wb") 
+path <- getwd()
+
+# Give warning to set the working directory if not able to find data files.
+projectDataPath <- file.path(path, "project_data")
+fileCount <- length(list.files(projectDataPath, recursive=TRUE))
+if (fileCount != 28) {
+  stop("Please use setwd() to the root of the cloned repository.")
 }
 
-# File unzip verification. If the directory does not exist, unzip the downloaded file.
-if(!file.exists(dir)){
-	unzip("UCIdata.zip", files = NULL, exdir=".")
-}
+# Read  'Subject' data
+dtTrainingSubjects <- fread(file.path(projectDataPath, "train", "subject_train.txt"))
+dtTestSubjects  <- fread(file.path(projectDataPath, "test" , "subject_test.txt" ))
 
+# Read 'Activity' data
+dtTrainingActivity <- fread(file.path(projectDataPath, "train", "Y_train.txt"))
+dtTestActivity  <- fread(file.path(projectDataPath, "test" , "Y_test.txt" ))
 
-#read the subject files
+# Read 'Measurements' data
 
-dtSubjectTrain <- fread(file.path(pathIn, "train", "subject_train.txt"))
-dtSubjectTest <- fread(file.path(pathIn, "test", "subject_test.txt"))
+dtTrainingMeasures <- data.table(read.table(file.path(projectDataPath, "train", "X_train.txt")))
+dtTestMeasures  <- data.table(read.table(file.path(projectDataPath, "test" , "X_test.txt")))
 
-# Read the activity files
-dtActivityTrain <- fread(file.path(pathIn, "train", "Y_train.txt"))
-dtActivityTest <- fread(file.path(pathIn, "test", "Y_test.txt"))
+# Row merge the Training and Test Subjects
+dtSubjects <- rbind(dtTrainingSubjects, dtTestSubjects)
 
-#Read the data files
-fileToDataTable <- function(f) {
-  df <- read.table(f)
-  dt <- data.table(df)
-}
-dtTrain <- fileToDataTable(file.path(pathIn, "train", "X_train.txt"))
-dtTest <- fileToDataTable(file.path(pathIn, "test", "X_test.txt"))
+setnames(dtSubjects, "V1", "subject")
 
-#link data tables
-dtSubject <- rbind(dtSubjectTrain, dtSubjectTest)
-setnames(dtSubject, "V1", "subject")
-dtActivity <- rbind(dtActivityTrain, dtActivityTest)
-setnames(dtActivity, "V1", "activityNum")
-dt <- rbind(dtTrain, dtTest)
+# Row merge the Training and Test Activities
+dtActivities <- rbind(dtTrainingActivity, dtTestActivity)
+setnames(dtActivities, "V1", "activityNumber")
 
-#Merge columns
+# Merge the Training and Test 'Measurements' data
+dtMeasures <- rbind(dtTrainingMeasures, dtTestMeasures)
 
-dtSubject <- cbind(dtSubject, dtActivity)
-dt <- cbind(dtSubject, dt)
+# Column merge the subjects to activities
+dtSubjectActivities <- cbind(dtSubjects, dtActivities)
+dtSubjectAtvitiesWithMeasures <- cbind(dtSubjectActivities, dtMeasures)
 
-#set key
+# Order all of the combined data by, subject and activity
+setkey(dtSubjectAtvitiesWithMeasures, subject, activityNumber)
 
-setkey(dt, subject, activityNum)
+## Read in the 'features.txt' 
+## This file matches up to the columns in the data.table, dtSubjectActivitiesWithMeasures
+## with the features/measures.
+dtAllFeatures <- fread(file.path(projectDataPath, "features.txt"))
+setnames(dtAllFeatures, c("V1", "V2"), c("measureNumber", "measureName"))
 
+# Use grepl to just get features/measures related to mean and std
+dtMeanStdMeasures <- dtAllFeatures[grepl("(mean|std)\\(\\)", measureName)]
+# Create a column to 'index/cross reference' into the 'measure' headers
+# in dtSubjectActivitiesWithMeasures
+dtMeanStdMeasures$measureCode <- dtMeanStdMeasures[, paste0("V", measureNumber)]
 
+# Build up the columns to select from the data.table,
 
-## Extract only the mean and standard deviation
-  # Read the features.txt file
-dtFeatures <- fread(file.path(pathIn, "features.txt"))
-setnames(dtFeatures, names(dtFeatures), c("featureNum", "featureName"))
-  #subset
+columnsToSelect <- c(key(dtSubjectAtvitiesWithMeasures), dtMeanStdMeasures$measureCode)
+# Just take the rows with the columns of interest ( std() and mean() )
+dtSubjectActivitesWithMeasuresMeanStd <- subset(dtSubjectAtvitiesWithMeasures, 
+                                                select = columnsToSelect)
 
-dtFeatures <- dtFeatures[grepl("mean\\(\\)|std\\(\\)", featureName)]
+# Read in the activity names and give them more meaningful names
+dtActivityNames <- fread(file.path(projectDataPath, "activity_labels.txt"))
+setnames(dtActivityNames, c("V1", "V2"), c("activityNumber", "activityName"))
 
-  # Convert the column numbers to a vector of variable names matching columns in dt.
+# Merge the 'meaningful activity names' 
+dtSubjectActivitesWithMeasuresMeanStd <- merge(dtSubjectActivitesWithMeasuresMeanStd, 
+                                               dtActivityNames, by = "activityNumber", 
+                                               all.x = TRUE)
 
-dtFeatures$featureCode <- dtFeatures[, paste0("V", featureNum)]
-head(dtFeatures)
+# Sort the data.table, dtSubjectActivitesWithMeasuresMeanStd
+setkey(dtSubjectActivitesWithMeasuresMeanStd, subject, activityNumber, activityName)
 
-dtFeatures$featureCode
+# Convert from a wide to narrow data.table 
+dtSubjectActivitesWithMeasuresMeanStd <- data.table(melt(dtSubjectActivitesWithMeasuresMeanStd, 
+                                                         id=c("subject", "activityName"), 
+                                                         measure.vars = c(3:68), 
+                                                         variable.name = "measureCode", 
+                                                         value.name="measureValue"))
 
-select <- c(key(dt), dtFeatures$featureCode)
-dt <- dt[, select, with = FALSE]
+# Merge measure codes
+dtSubjectActivitesWithMeasuresMeanStd <- merge(dtSubjectActivitesWithMeasuresMeanStd, 
+                                               dtMeanStdMeasures[, list(measureNumber, measureCode, measureName)], 
+                                               by="measureCode", all.x=TRUE)
 
-##Use descriptive activity names
+# Convert activityName and measureName to factors
+dtSubjectActivitesWithMeasuresMeanStd$activityName <- 
+  factor(dtSubjectActivitesWithMeasuresMeanStd$activityName)
+dtSubjectActivitesWithMeasuresMeanStd$measureName <- 
+  factor(dtSubjectActivitesWithMeasuresMeanStd$measureName)
 
-dtActivityNames <- fread(file.path(pathIn, "activity_labels.txt"))
-setnames(dtActivityNames, names(dtActivityNames), c("activityNum", "activityName"))
+# Reshape the data to get the averages 
+measureAvgerages <- dcast(dtSubjectActivitesWithMeasuresMeanStd, 
+                          subject + activityName ~ measureName, 
+                          mean, 
+                          value.var="measureValue")
 
-
-##Label with descriptive activity names
-
-  # merge labels
-dt <- merge(dt, dtActivityNames, by = "activityNum", all.x = TRUE)
-
-  #add key
-setkey(dt, subject, activityNum, activityName)
-
-  #change data table shape
-dt <- data.table(melt(dt, key(dt), variable.name = "featureCode"))
-
-  #merge activity name
-dt <- merge(dt, dtFeatures[, list(featureNum, featureCode, featureName)], by = "featureCode", 
-            all.x = TRUE)
-
-  #create new variables
-dt$activity <- factor(dt$activityName)
-dt$feature <- factor(dt$featureName)
-
-  #help function
-grepthis <- function(regex) {
-  grepl(regex, dt$feature)
-}
-# # Features with two category
-n <- 2
-y <- matrix(seq(1, n), nrow = n)
-x <- matrix(c(grepthis("^t"), grepthis("^f")), ncol = nrow(y))
-dt$featDomain <- factor(x %*% y, labels = c("Time", "Freq"))
-x <- matrix(c(grepthis("Acc"), grepthis("Gyro")), ncol = nrow(y))
-dt$featInstrument <- factor(x %*% y, labels = c("Accelerometer", "Gyroscope"))
-x <- matrix(c(grepthis("BodyAcc"), grepthis("GravityAcc")), ncol = nrow(y))
-dt$featAcceleration <- factor(x %*% y, labels = c(NA, "Body", "Gravity"))
-x <- matrix(c(grepthis("mean()"), grepthis("std()")), ncol = nrow(y))
-dt$featVariable <- factor(x %*% y, labels = c("Mean", "SD"))
- 
- # Features with one category
-dt$featJerk <- factor(grepthis("Jerk"), labels = c(NA, "Jerk"))
-dt$featMagnitude <- factor(grepthis("Mag"), labels = c(NA, "Magnitude"))
-
-  # Features with three category
-n <- 3
-y <- matrix(seq(1, n), nrow = n)
-x <- matrix(c(grepthis("-X"), grepthis("-Y"), grepthis("-Z")), ncol = nrow(y))
-
-dt$featAxis <- factor(x %*% y, labels = c(NA, "X", "Y", "Z"))
-
-#Cross check
-r1 <- nrow(dt[, .N, by = c("feature")])
-r2 <- nrow(dt[, .N, by = c("featDomain", "featAcceleration", "featInstrument", 
-                           "featJerk", "featMagnitude", "featVariable", "featAxis")])
-r1 == r2
-
-
-##Create tidy data set
-  #Set key  
-setkey(dt, subject, activity, featDomain, featAcceleration, featInstrument, featJerk, featMagnitude, featVariable, featAxis)
-dtTidy <- dt[, list(count = .N, average = mean(value)), by = key(dt)]
-
+# Write the tab delimited file
+write.table(measureAvgerages, file="tidyData.txt", row.name=FALSE, sep = "\t")
