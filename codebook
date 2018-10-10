@@ -1,0 +1,33 @@
+Codebook
+
+dtTrainingMeasures - read "measurement' data, train
+dtTestMeasures  - read "measurement' data, test
+
+dtSubjects - merge training and test subjects
+
+dtActivities - merge training and test activities 
+
+dtMeasures - merge training and test measurements
+
+dtSubjectActivities - merge subjects and activities
+
+dtAllFeatures - read features.txt
+
+dtMeanStdMeasures - get features/measures related to mean and std
+
+columnsToSelect - build colums to select from the data.table
+
+dtSubjectActivitesWithMeasuresMeanStd -take only the rows with the columns of interest ( std() and mean() )
+
+dtActivityNames - Rename the activity names to something mor meaningful
+
+dtSubjectActivitesWithMeasuresMeanStd - mergre the more meaningful names
+
+dtSubjectActivitesWithMeasuresMeanStd -convert from a wide to narrow data.table
+
+dtSubjectActivitesWithMeasuresMeanStd - merge measure code
+
+dtSubjectActivitesWithMeasuresMeanStd$activityName - convert activityName to factor
+dtSubjectActivitesWithMeasuresMeanStd$measureName -convert measureName to factor
+
+measureAvgerages - reshape the data to get averages
